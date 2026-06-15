@@ -1,21 +1,17 @@
-﻿using System;
-using System.Threading.Tasks;
-using System.IO;
-using System.Reflection;
-using LanguageTeller;
+﻿using LanguageTeller;
 
 namespace SmartReader.NaturalLanguageProcessing
 {
     public static class NLP
     {
-        private static FastText LanguageTeller = new FastText();
+        private static readonly FastText LanguageTeller = new();
         
         /// <summary>
         /// Enable the automatic identification of the language.
         /// </summary>
         public static void Enable()
         {
-            Article.LanguageIdentification = IdentifyLanguageUsingNLP;
+            Article.LanguageIdentification = IdentifyLanguageUsingNlp;
         }
 
         /// <summary>
@@ -26,9 +22,6 @@ namespace SmartReader.NaturalLanguageProcessing
             Article.LanguageIdentification = (text, metadata) => metadata;
         }
 
-        private static string IdentifyLanguageUsingNLP(string text, string? language)
-        {
-            return LanguageTeller.TellLanguage(text).Language;            
-        }
+        private static string IdentifyLanguageUsingNlp(string text, string language) => LanguageTeller.TellLanguage(text).Language;
     }
 }

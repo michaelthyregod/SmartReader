@@ -1,13 +1,4 @@
-﻿using AngleSharp.Dom;
-using AngleSharp.Html.Parser;
-using LanguageTeller;
-using SmartReader;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
+﻿using LanguageTeller;
 using Xunit;
 
 namespace SmartReaderTests

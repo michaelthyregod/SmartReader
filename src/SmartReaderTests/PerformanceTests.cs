@@ -1,16 +1,5 @@
-﻿using AngleSharp.Html.Parser;
-using RichardSzalay.MockHttp;
+﻿using RichardSzalay.MockHttp;
 using SmartReader;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace SmartReaderTests
@@ -28,7 +17,7 @@ namespace SmartReaderTests
 
             var reader = new Reader("https://localhost/article");
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             var watch = System.Diagnostics.Stopwatch.StartNew();
             Article article = reader.GetArticle();                       
             
@@ -53,7 +42,7 @@ namespace SmartReaderTests
             var reader = new Reader("https://localhost/article");
             reader.PreCleanPage = true;
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             var watch = System.Diagnostics.Stopwatch.StartNew();
             Article article = reader.GetArticle();                       
             
@@ -65,7 +54,7 @@ namespace SmartReaderTests
         }
 
         [Fact]
-        public async void TestGetArticleIsCancelled()
+        public async Task TestGetArticleIsCancelled()
         {
             // setting up mocking HttpClient
             var mockHttp = new MockHttpMessageHandler();
@@ -77,7 +66,7 @@ namespace SmartReaderTests
 
             var reader = new Reader("https://localhost/article");            
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             var watch = System.Diagnostics.Stopwatch.StartNew();
             CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(8000));
             

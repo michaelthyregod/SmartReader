@@ -1,5 +1,4 @@
 ﻿using SmartReader;
-using System;
 using Xunit;
 
 namespace SmartReaderTests

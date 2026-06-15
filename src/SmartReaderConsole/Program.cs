@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using SmartReader;
 using SmartReader.NaturalLanguageProcessing;
 
@@ -160,13 +161,14 @@ namespace SmartReaderConsole
             }
         }
 
-        static void AddTest(string name, string url)
+        static async Task AddTest(string name, string url)
         {
             string directory = @"..\..\..\..\SmartReaderTests\test-pages\" + name;
             Directory.CreateDirectory(directory);
 
-            WebClient client = new WebClient();
-            client.DownloadFile(url, (Path.Combine(directory, "source.html")));
+            using var client = new HttpClient();
+            var sourceBytes = await client.GetByteArrayAsync(url);
+            File.WriteAllBytes(Path.Combine(directory, "source.html"), sourceBytes);
 
             string sourceContent = File.ReadAllText(Path.Combine(directory, "source.html"));
 

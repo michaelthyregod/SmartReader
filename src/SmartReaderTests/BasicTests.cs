@@ -2,14 +2,12 @@
 using Xunit;
 using SmartReader;
 using System.IO;
-using Xunit.Abstractions;
 using AngleSharp.Html.Parser;
 using RichardSzalay.MockHttp;
 using System.Text.RegularExpressions;
 using AngleSharp.Dom;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
@@ -426,7 +424,7 @@ namespace SmartReaderTests
         }
 
         [Fact]
-        public void TestConvertImagesAsDataURI()
+        public async Task TestConvertImagesAsDataURI()
         {
             // creating element
             var parser = new HtmlParser(new HtmlParserOptions());
@@ -451,12 +449,12 @@ namespace SmartReaderTests
 
             var reader = new Reader("https://localhost/article");
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
 
             var article = new Article(new Uri("https://localhost/article"), "Great article", "by Ulysses", "", "en",
                 "Nobody", doc.Body, new Metadata(), true, reader);
 
-            article.ConvertImagesToDataUriAsync().Wait();
+            await article.ConvertImagesToDataUriAsync();
 
             // check that there is one image
             Assert.Single(Regex.Matches(article.Content, "<img"));
@@ -693,7 +691,7 @@ namespace SmartReaderTests
 
             var reader = new Reader("https://localhost/article");
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             Assert.False(reader.GetArticle().Completed);
         }
 
@@ -715,7 +713,7 @@ namespace SmartReaderTests
             var reader = new Reader("https://localhost/article");
             reader.MaxElemsToParse = 1;
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             Article article = reader.GetArticle();
 
             Assert.False(article.Completed);
@@ -762,7 +760,7 @@ namespace SmartReaderTests
             // Wait to ensure activation of CancellationToken
             Thread.Sleep(100);
 
-            Reader.SetBaseHttpClientHandler(mockHttp);            
+            reader.SetHttpClientHandler(mockHttp);            
             Article article = await reader.GetArticleAsync(cts.Token);
 
             Assert.False(article.Completed);
@@ -788,7 +786,7 @@ namespace SmartReaderTests
 
             CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(30));
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             Article article = await reader.GetArticleAsync(cts.Token);
 
             // The operation it is cancelled if the cancellation happens during parsing,
@@ -818,7 +816,7 @@ namespace SmartReaderTests
 
             CancellationTokenSource cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(2000));
 
-            Reader.SetBaseHttpClientHandler(mockHttp);
+            reader.SetHttpClientHandler(mockHttp);
             Article article = await reader.GetArticleAsync(cts.Token);
 
             Assert.False(article.Completed);

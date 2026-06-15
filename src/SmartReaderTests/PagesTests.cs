@@ -1,14 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Moq;
 using SmartReader;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace SmartReaderTests
 {

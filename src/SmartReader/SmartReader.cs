@@ -25,6 +25,11 @@ namespace SmartReader
     public class Reader : IDisposable
     {
         private static Lazy<HttpMessageHandler> _httpClientHandler = new Lazy<HttpMessageHandler>(() => new HttpClientHandler());
+
+        // Per-instance HTTP handler override. When set it takes precedence over the shared static
+        // handler, letting each Reader use its own handler without mutating global state - which is
+        // what makes parallel use (e.g. xUnit's parallel test execution) safe.
+        private HttpMessageHandler? _instanceHttpClientHandler;
         private string? _userAgent = "SmartReader Library";
 
         private readonly Uri uri;
@@ -51,7 +56,12 @@ namespace SmartReader
 
         private List<Attempt> attempts = new();
 
-        // Start with all flags set        
+        // Readability scores are kept in a side table keyed by element identity, rather than
+        // serialized into a DOM attribute. This avoids a double.Parse/double.ToString round-trip
+        // (and a DOM attribute mutation) on every score access.
+        private readonly Dictionary<IElement, double> readabilityScores = new();
+
+        // Start with all flags set
         private Flags flags = Flags.StripUnlikelys | Flags.WeightClasses | Flags.CleanConditionally;
 
         /// <summary>Max number of nodes supported by this parser</summary>
@@ -884,7 +894,7 @@ namespace SmartReader
 
             if ((current = GetReadabilityScore(node)) > 0d)
             {
-                node.SetAttribute("readability-score", (current + score).ToString(CultureInfo.InvariantCulture.NumberFormat));
+                SetReadabilityScore(node, current + score);
             }
             else
             {
@@ -894,14 +904,12 @@ namespace SmartReader
 
         private void SetReadabilityScore(IElement node, double score)
         {
-            node.SetAttribute("readability-score", score.ToString(CultureInfo.InvariantCulture.NumberFormat));
+            readabilityScores[node] = score;
         }
 
         private double GetReadabilityScore(IElement node)
         {
-            return node.GetAttribute("readability-score") is { Length: > 0 } readabilityScore
-                ? double.Parse(readabilityScore, CultureInfo.InvariantCulture.NumberFormat)
-                : 0D;
+            return readabilityScores.TryGetValue(node, out var score) ? score : 0D;
         }
 
         /// <summary>
@@ -1142,48 +1150,71 @@ namespace SmartReader
                     // Turn all divs that don't have children block level elements into p's
                     if (node.TagName is "DIV")
                     {
-                        // Put phrasing content into paragraphs.                        
-                        var childNode = node.FirstChild;
-                        while (childNode != null)
+                        // Put phrasing content into paragraphs.
+                        //
+                        // Moving nodes out of an element one at a time is O(n) per move in AngleSharp
+                        // (its child list is array-backed, so each removal shifts the remaining items),
+                        // which makes wrapping a DIV that holds a large run of phrasing content O(n^2).
+                        // Instead we snapshot the children, detach them all in a single O(n) clear, and
+                        // rebuild the DIV by re-attaching the (now parentless) nodes - each re-attach is
+                        // O(1). The resulting structure is identical to the per-node approach.
+                        if (node.HasChildNodes)
                         {
-                            var nextSibling = childNode.NextSibling;
-                            if (NodeUtility.IsPhrasingContent(childNode))
+                            var originalChildren = new List<INode>();
+                            for (var c = node.FirstChild; c != null; c = c.NextSibling)
+                                originalChildren.Add(c);
+
+                            node.InnerHtml = "";
+
+                            for (int ci = 0; ci < originalChildren.Count; ci++)
                             {
-                                var fragment = doc!.CreateDocumentFragment();
-                                // Collect all consecutive phrasing content into a fragment.
-                                do
+                                INode? childNode = originalChildren[ci];
+                                if (NodeUtility.IsPhrasingContent(childNode))
                                 {
-                                    nextSibling = childNode.NextSibling;
-                                    fragment.AppendChild(childNode);
-                                    childNode = nextSibling;
-                                } while (childNode != null && NodeUtility.IsPhrasingContent(childNode));
+                                    var fragment = doc!.CreateDocumentFragment();
+                                    // Collect all consecutive phrasing content into a fragment.
+                                    do
+                                    {
+                                        fragment.AppendChild(childNode);
+                                        ci++;
+                                        childNode = ci < originalChildren.Count ? originalChildren[ci] : null;
+                                    } while (childNode != null && NodeUtility.IsPhrasingContent(childNode));
+                                    // Step back so the outer loop's increment lands on the first
+                                    // non-phrasing node (or terminates).
+                                    ci--;
 
-                                // Trim leading and trailing whitespace from the fragment.
-                                while (
-                                  fragment.FirstChild != null &&
-                                  NodeUtility.IsWhitespace(fragment.FirstChild)
-                                )
-                                {
-                                    fragment.RemoveChild(fragment.FirstChild);                                    
-                                }
-                                while (
-                                  fragment.LastChild != null &&
-                                    NodeUtility.IsWhitespace(fragment.LastChild)
-                                )
-                                {                                    
-                                    fragment.RemoveChild(fragment.LastChild);
-                                }
+                                    // Trim leading and trailing whitespace from the fragment.
+                                    while (
+                                      fragment.FirstChild != null &&
+                                      NodeUtility.IsWhitespace(fragment.FirstChild)
+                                    )
+                                    {
+                                        fragment.RemoveChild(fragment.FirstChild);
+                                    }
+                                    while (
+                                      fragment.LastChild != null &&
+                                        NodeUtility.IsWhitespace(fragment.LastChild)
+                                    )
+                                    {
+                                        fragment.RemoveChild(fragment.LastChild);
+                                    }
 
-                                // If the fragment contains anything, wrap it in a paragraph and
-                                // insert it before the next non-phrasing node.
-                                if (fragment.FirstChild != null)
+                                    // If the fragment contains anything, wrap it in a paragraph.
+                                    // (If it was only whitespace, those nodes are dropped, exactly
+                                    // as the previous implementation did.)
+                                    if (fragment.FirstChild != null)
+                                    {
+                                        var p = doc.CreateElement("p");
+                                        p.AppendChild(fragment);
+                                        node.AppendChild(p);
+                                    }
+                                }
+                                else
                                 {
-                                    var p = doc.CreateElement("p");
-                                    p.AppendChild(fragment);
-                                    node.InsertBefore(p, nextSibling);
+                                    // Non-phrasing node: re-attach it in its original position.
+                                    node.AppendChild(childNode);
                                 }
                             }
-                            childNode = nextSibling;
                         }
 
                         // Sites like http://mobile.slate.com encloses each paragraph with a DIV
@@ -2364,7 +2395,7 @@ namespace SmartReader
 
         private async Task<Stream> GetStreamAsync(Uri resource, CancellationToken token)
         {
-            using var httpClient = new HttpClient(_httpClientHandler.Value, false);
+            using var httpClient = new HttpClient(_instanceHttpClientHandler ?? _httpClientHandler.Value, false);
 
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(_userAgent);
 
@@ -2397,7 +2428,7 @@ namespace SmartReader
 
         internal async Task<long> GetImageSizeAsync(Uri imageSrc)
         {
-            using var httpClient = new HttpClient(_httpClientHandler.Value, false);
+            using var httpClient = new HttpClient(_instanceHttpClientHandler ?? _httpClientHandler.Value, false);
 
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(_userAgent);
 
@@ -2420,7 +2451,7 @@ namespace SmartReader
 
         internal async Task<byte[]> GetImageBytesAsync(Uri resource)
         {
-            using var httpClient = new HttpClient(_httpClientHandler.Value, false);
+            using var httpClient = new HttpClient(_instanceHttpClientHandler ?? _httpClientHandler.Value, false);
 
             httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(_userAgent);
 
@@ -2517,8 +2548,24 @@ namespace SmartReader
             return this;
         }
 
+        /// <summary>
+        /// Sets a custom <see cref="HttpMessageHandler"/> for this Reader instance only.
+        /// Unlike <see cref="SetBaseHttpClientHandler"/> this does not touch shared static state,
+        /// so it is safe to use from concurrently-running readers (e.g. parallel tests).
+        /// </summary>
+        /// <param name="clientHandler">The handler to use for web requests made by this instance</param>
+        /// <returns>This <see cref="Reader"/> instance, to allow chaining</returns>
+        internal Reader SetHttpClientHandler(HttpMessageHandler clientHandler)
+        {
+            _instanceHttpClientHandler = clientHandler;
+            return this;
+        }
+
         /// <summary>Allow to set a custom HttpClient</summary>
         /// <param name="clientHandler">The new HttpClientHandler for all web requests made by this library</param>
+        [Obsolete("SetBaseHttpClientHandler mutates process-wide static state shared by every Reader " +
+                  "instance, which is not safe when readers run concurrently (e.g. parallel tests). " +
+                  "Prefer the per-instance handler seam instead.")]
         public static void SetBaseHttpClientHandler(HttpMessageHandler clientHandler)
         {
             _httpClientHandler = new Lazy<HttpMessageHandler>(() => clientHandler);

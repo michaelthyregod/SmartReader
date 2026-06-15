@@ -1,5 +1,3 @@
-using System;
-
 namespace SmartReader.WebDemo.Models
 {
     public class ErrorViewModel

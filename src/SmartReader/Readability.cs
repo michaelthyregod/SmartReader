@@ -3,13 +3,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using System.Web;
 using AngleSharp.Common;
 using AngleSharp.Dom;
 using AngleSharp.Html.Dom;
-using AngleSharp.Text;
 
 namespace SmartReader
 {

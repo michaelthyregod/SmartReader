@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Text;
-using AngleSharp.Dom;
 using AngleSharp.Text;
 
 namespace SmartReader
