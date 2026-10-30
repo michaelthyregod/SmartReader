@@ -9,9 +9,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AngleSharp" Version="1.5.1" />
-    <PackageReference Include="AngleSharp.Css" Version="1.0.0-beta.216" />
-    <PackageReference Include="HtmlSanitizer" Version="9.1.923-beta" />
+    <PackageReference Include="AngleSharp" Version="1.7.1" />
+    <PackageReference Include="AngleSharp.Css" Version="1.0.1" />
+    <PackageReference Include="HtmlSanitizer" Version="9.2.995" />
   </ItemGroup>
 
   <ItemGroup>
